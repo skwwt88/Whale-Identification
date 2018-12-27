@@ -2,6 +2,7 @@
 import csv
 import os
 import Augmentor
+import random
 
 import cv2 as cv
 import numpy as np
@@ -9,27 +10,26 @@ from keras.applications.inception_resnet_v2 import preprocess_input
 from keras.utils import Sequence
 from keras.utils import to_categorical
 
-from config import train_image_folder, train_label_file, batch_size, img_width, img_height
+from config import train_image_folder, train_label_file, batch_size, img_width, img_height, num_classes
 
 class DataGenSequence(Sequence):
     def __init__(self, usage):
         self.usage = usage
-        if self.usage == 'train':
-            annot_file = train_label_file
-            self.image_folder = train_image_folder
-        else:
-            annot_file = valid_annot
-            self.image_folder = valid_image_folder
-
+        self.image_folder = train_image_folder
+        annot_file = train_label_file
+            
         with open(annot_file, 'r') as file:
             self.samples = [x for x in list(csv.reader(file))[1:] if x[1] != "new_whale"]
+            
+        if self.usage != 'train':
+            self.samples = random.sample(self.samples, 2000)
 
-        self.num_classes = list(set([x[1] for x in self.samples]))
-        self.num_classes.sort()
-        self.c2id = dict((c, i) for i, c in enumerate(self.num_classes))
+        self.classes = list(set([x[1] for x in self.samples]))
+        self.classes.sort()
+        self.c2id = dict((c, i) for i, c in enumerate(self.classes))
 
-        # print self.samples
-        print len(self.num_classes)
+        print len(self.samples)
+        print len(self.classes)
         np.random.shuffle(self.samples)
 
     def __len__(self):
@@ -42,7 +42,7 @@ class DataGenSequence(Sequence):
         i = idx * batch_size
         length = min(batch_size, (len(self.samples) - i))
         batch_inputs = np.empty((length, img_height, img_width, 3), dtype=np.float32)
-        batch_target = np.empty((length, len(self.num_classes)), dtype=np.float32)
+        batch_target = np.empty((length, num_classes), dtype=np.float32)
 
         for i_batch in range(length):
             sample = self.samples[i + i_batch]
@@ -55,7 +55,7 @@ class DataGenSequence(Sequence):
             image = image[:, :, ::-1] # RGB
 
             batch_inputs[i_batch] = preprocess_input(image)
-            batch_target[i_batch] = to_categorical(self.c2id[class_id], len(self.num_classes))
+            batch_target[i_batch] = to_categorical(self.c2id[class_id], num_classes)
 
         return batch_inputs, batch_target
 
