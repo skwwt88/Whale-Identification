@@ -1,5 +1,6 @@
 .idea/
 data/
+boxdata/
 models/
 __pycache__/
 custom_layers/__pycache__/
