@@ -8,4 +8,6 @@ logs/
 images/
 *.csv
 *.pyc
+*.model
+*.h5
 
