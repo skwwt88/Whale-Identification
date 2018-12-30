@@ -4,7 +4,7 @@ from keras.engine.topology import Input
 from keras.layers import BatchNormalization, Concatenate, Conv2D, Dense, Dropout, Flatten, MaxPooling2D
 from keras.models import Model
 
-from config import img_height, img_width, num_channels, num_classes, FREEZE_LAYERS, dropout_rate
+from config import img_height, img_width, num_channels, nb_classes, FREEZE_LAYERS, dropout_rate
 
 
 def build_model():
@@ -13,7 +13,7 @@ def build_model():
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
     x = Dropout(dropout_rate, name='Dropout')(x)
-    x = Dense(num_classes, name='Logits')(x)
+    x = Dense(nb_classes, name='Logits')(x)
     x = Activation('softmax', name='Predictions')(x)
     model = Model(inputs=base_model.input, outputs=x)
     for layer in model.layers[:FREEZE_LAYERS]:
@@ -69,7 +69,7 @@ def build_model_VGG(with_dropout=True):
 
     x = GlobalAveragePooling2D()(x)
     x = Dropout(dense_drop, name='Dropout')(x)
-    x = Dense(num_classes, name='Logits')(x)
+    x = Dense(nb_classes, name='Logits')(x)
     x = Activation('softmax', name='Predictions')(x)
     model = Model(inputs=inp, outputs=x)
 

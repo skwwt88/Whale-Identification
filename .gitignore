@@ -11,4 +11,4 @@ images/
 *.pyc
 *.model
 *.h5
-
+src/obj/
