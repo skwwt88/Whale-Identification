@@ -9,6 +9,7 @@ num_epochs = 100
 patience = 50
 verbose = 1
 
+test_image_folder = '../data/test'
 train_image_folder = '../data/train'
 samples_file = '../data/samples.csv'
 valid_file = '../data/valid.csv'
