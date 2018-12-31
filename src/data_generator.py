@@ -12,6 +12,7 @@ from keras.applications.inception_resnet_v2 import preprocess_input
 from keras.utils import Sequence
 from keras.utils import to_categorical
 from sklearn.utils import shuffle
+from augmentor import aug_pipe
 
 from config import train_image_folder, samples_file, valid_file, batch_size, img_width, img_height, nb_classes
 
@@ -50,6 +51,8 @@ class DataGenSequence(Sequence):
             image = cv.imread(filename)
             image = cv.resize(image, (img_width, img_height), interpolation = cv.INTER_CUBIC)
             image = image[:, :, ::-1] # RGB
+            if self.usage == 'train':
+                image = aug_pipe.augment_image(image)
 
             batch_inputs[index] = preprocess_input(image)
             batch_target[index] = to_categorical(self.c2id[sample['Id']], nb_classes)

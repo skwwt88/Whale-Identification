@@ -3,10 +3,11 @@ import numpy as np
 import random
 from config import origin_train_label_file, samples_file, valid_file
 from utils import save_obj
+from sklearn.utils import shuffle
 
 def split_samples_for_test():
     df = pd.read_csv(origin_train_label_file)
-    df = df[df.Id != 'new_whale']
+    df = shuffle(df[df.Id != 'new_whale']).reset_index(drop=True)
     grouped = df.groupby(["Id"])
     df = grouped.filter(lambda x: len(x) >= 10).reset_index(drop=True)
     num_all_samples = len(df)
