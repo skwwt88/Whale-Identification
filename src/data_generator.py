@@ -73,6 +73,7 @@ if __name__ == '__main__':
         image = revert_pre_process(x[i])
         image = image[:, :, ::-1].astype(np.uint8)
         print(image.shape)
+        print(y[i])
         cv.imwrite('images/sample_{}.jpg'.format(i), image)
 
     

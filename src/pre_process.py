@@ -5,6 +5,21 @@ from config import origin_train_label_file, samples_file, valid_file
 from utils import save_obj
 from sklearn.utils import shuffle
 
+def extend_samples(df, mincount = 3):
+    grouped = df.groupby(["Id"])
+    result = grouped.filter(lambda x: len(x) >= mincount).reset_index(drop=True)
+    
+    for k, v in grouped:
+        new_count = mincount - len(v)
+        length = len(v)
+        if new_count > 0:
+            for i in range(mincount):
+                result = result.append({'Image': v["Image"].iloc(0)[i % length], 'Id': k}, ignore_index=True)
+        else:
+            print(new_count)
+    return result
+
+
 def split_samples_for_test():
     df = pd.read_csv(origin_train_label_file)
     df = shuffle(df[df.Id != 'new_whale']).reset_index(drop=True)
@@ -13,7 +28,7 @@ def split_samples_for_test():
     df = df.reset_index(drop=True)
     num_all_samples = len(df)
     num_valid_samples = int(num_all_samples * 0.2)
-    train_samples = df.iloc[num_valid_samples:]
+    train_samples = df.iloc[:]
     valid_samples = df.iloc[:num_valid_samples]
     num_valid_samples = len(valid_samples)
     classes = [c for (c, g) in df.groupby(['Id'])]
@@ -21,6 +36,7 @@ def split_samples_for_test():
 
     valid_samples.to_csv(valid_file, index=False)
 
+    train_samples = extend_samples(train_samples)
     num_train_samples = len(train_samples)
     train_samples.to_csv(samples_file, index=False)
 

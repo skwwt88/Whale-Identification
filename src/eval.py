@@ -47,7 +47,17 @@ if __name__ == '__main__':
             preds = model.predict(rgb_img)
             prob = np.max(preds)
             class_ids = preds[0].argsort()[-4:][::-1]
-            ids = " ".join(["new_whale"] + [id2c[cid] for cid in class_ids])
+            p = [preds[0][i] for i in class_ids]
+            ids = [id2c[cid] for cid in class_ids]
+
+            if (p[0] < 0.37):
+                ids.insert(0, 'new_whale')
+            elif (p[1] < 0.37):
+                ids.insert(1, 'new_whale')
+            else:
+                ids.insert(2, 'new_whale')
+
+            ids = " ".join(ids)
             result.append((image_id, ids))
         df = pd.DataFrame(result, columns=["Image", "Id"])
         df.to_csv('../data/new_sub.csv', index=False)

@@ -12,7 +12,7 @@ def load_obj(name ):
 
 def get_best_model():
     import re
-    pattern = 'model.(?P<epoch>\d+)-(?P<val_acc>[0-9]*\.?[0-9]*).hdf5'
+    pattern = 'model-1231.(?P<epoch>\d+)-(?P<val_acc>[0-9]*\.?[0-9]*).hdf5'
     p = re.compile(pattern)
     files = [f for f in os.listdir('../models/') if p.match(f)]
     filename = None
