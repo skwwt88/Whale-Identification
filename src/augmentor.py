@@ -22,7 +22,7 @@ aug_pipe = iaa.Sequential(
         # execute 0 to 5 of the following (less important) augmenters per image
         # don't execute all of them, as that would often be way too strong
 
-        iaa.SomeOf((0, 2),
+        iaa.SomeOf((0, 3),
                    [
                        # sometimes(iaa.Superpixels(p_replace=(0, 1.0), n_segments=(20, 200))), # convert images into their superpixel representation
                        iaa.OneOf([
@@ -48,7 +48,7 @@ aug_pipe = iaa.Sequential(
                        iaa.Multiply((0.5, 1.5), per_channel=0.5),
                        # change brightness of images (50-150% of original value)
                        # iaa.ContrastNormalization((0.5, 2.0), per_channel=0.5),  # improve or worsen the contrast
-                       # iaa.Grayscale(alpha=(0.0, 1.0)),
+                       iaa.Grayscale(alpha=(0.0, 1.0)),
                        # sometimes(iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25)), # move pixels locally around (with random strengths)
                        # sometimes(iaa.PiecewiseAffine(scale=(0.01, 0.05))) # sometimes move parts of the image around
                    ],

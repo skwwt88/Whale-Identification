@@ -342,8 +342,6 @@ for layer in model2.layers:
 model2.compile(Adam(lr=0.002), loss='mean_squared_error')
 model2.save('cropping.model')
 
-
-
 model2.evaluate(val_a, val_b, verbose=0)
 
 images = []

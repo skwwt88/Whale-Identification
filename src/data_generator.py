@@ -3,7 +3,6 @@ import csv
 import os
 import Augmentor
 import random
-import utils
 
 import cv2 as cv
 import numpy as np
@@ -14,7 +13,8 @@ from keras.utils import to_categorical
 from sklearn.utils import shuffle
 from augmentor import aug_pipe
 
-from config import train_image_folder, samples_file, valid_file, batch_size, img_width, img_height, nb_classes
+from config import train_image_folder, samples_file, valid_file, batch_size, img_width, img_height
+import utils
 
 class DataGenSequence(Sequence):
     def __init__(self, usage):
@@ -42,7 +42,7 @@ class DataGenSequence(Sequence):
         i = idx * batch_size
         length = min(batch_size, (len(self.train_samples) - i))
         batch_inputs = np.empty((length, img_height, img_width, 3), dtype=np.float32)
-        batch_target = np.empty((length, nb_classes), dtype=np.float32)
+        batch_target = np.empty((length, utils.nb_classes), dtype=np.float32)
 
         for index in range(length):
             sample = self.train_samples.iloc[i + index]
@@ -55,7 +55,7 @@ class DataGenSequence(Sequence):
                 image = aug_pipe.augment_image(image)
 
             batch_inputs[index] = preprocess_input(image)
-            batch_target[index] = to_categorical(self.c2id[sample['Id']], nb_classes)
+            batch_target[index] = to_categorical(self.c2id[sample['Id']], utils.nb_classes)
 
         return batch_inputs, batch_target
 
