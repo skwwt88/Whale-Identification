@@ -12,3 +12,4 @@ images/
 *.model
 *.h5
 src/obj/
+output/

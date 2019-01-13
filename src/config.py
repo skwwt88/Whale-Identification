@@ -8,14 +8,11 @@ num_epochs = 1000
 patience = 50
 verbose = 1
 
-test_image_folder = '../data/test'
-train_image_folder = '../data/train'
-samples_file = '../data/samples.csv'
-valid_file = '../data/valid.csv'
-origin_train_label_file = '../data/train.csv'
+test_image_folder = '../input/humpback-whale-identification/test'
+train_image_folder = '../input/humpback-whale-identification/train'
+origin_train_label_file = '../input/humpback-whale-identification/train.csv'
 
-FREEZE_LAYERS = 2
-dropout_rate = 0.2
-
-is_test = False
-model_name = 'rest_pca'#'vgg16'
+valid_file_name = 'valid.csv'
+train_file_name = 'train.csv'
+config_file_name = 'config.pkl'
+c2id_file_name = 'c2id.pkl'

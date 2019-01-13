@@ -1,133 +1,67 @@
 import pandas as pd
 import numpy as np
-import random
-from config import origin_train_label_file, samples_file, valid_file, is_test
-from utils import save_obj
+import os
+import utils
+import config
+
+from config import origin_train_label_file
 from sklearn.utils import shuffle
 
-def extend_samples(df, mincount = 3):
-    grouped = df.groupby(["Id"])
-    result = grouped.filter(lambda x: len(x) >= mincount).reset_index(drop=True)
-    
-    for k, v in grouped:
-        new_count = mincount - len(v)
-        length = len(v)
-        if new_count > 0:
-            for i in range(mincount):
-                result = result.append({'Image': v["Image"].iloc(0)[i % length], 'Id': k}, ignore_index=True)
+def extract_classes(df):
+    return [c for (c, g) in df.groupby(['Id'])]
 
-    return result
+def generate_c2id(classes):
+    classes = np.array(classes)
+    np.sort(classes)
+    return dict((c, i) for (i, c) in enumerate(list(classes)))
 
-
-def split_samples_for_train():
+def data_prepare_feature_extraction(store_folder, min_sample_count = 4, valid_ratio = 0.2):
     df = pd.read_csv(origin_train_label_file)
-    df = shuffle(df[df.Id != 'new_whale']).reset_index(drop=True)
-    grouped = df.groupby(["Id"])
-    #df = grouped.filter(lambda x: len(x) >= 10).reset_index(drop=True)
-    df = df.reset_index(drop=True)
-    num_all_samples = len(df)
-    num_valid_samples = int(num_all_samples * 0.2)
-    train_samples = df.iloc[:]
-    valid_samples = df.iloc[:num_valid_samples]
-    num_valid_samples = len(valid_samples)
-    classes = [c for (c, g) in df.groupby(['Id'])]
-    nb_classes = len(classes);
-
-    valid_samples.to_csv(valid_file, index=False)
-
-    train_samples = extend_samples(train_samples)
-    num_train_samples = len(train_samples)
-    train_samples.to_csv(samples_file, index=False)
-
-    data_config = {'nb_classes': nb_classes, 'num_train_samples':num_train_samples, 'num_valid_samples':num_valid_samples}
-    save_obj(data_config, 'data_config')
-    print(data_config)
-
-    c2id = dict((c, i) for (i, c) in enumerate(list(classes)))
-    save_obj(c2id, 'c2id')
-
-def split_samples_for_train_with_validset():
-    df = pd.read_csv(origin_train_label_file)
-    df = shuffle(df[df.Id != 'new_whale']).reset_index(drop=True)
-    grouped = df.groupby(["Id"])
-    #df = grouped.filter(lambda x: len(x) >= 10).reset_index(drop=True)
-    df = df.reset_index(drop=True)
-    num_all_samples = len(df)
-    num_valid_samples = int(num_all_samples * 0.1)
-    train_samples = df.iloc[num_valid_samples:]
-    valid_samples = df.iloc[:num_valid_samples]
-    num_valid_samples = len(valid_samples)
-    classes = [c for (c, g) in df.groupby(['Id'])]
-    nb_classes = len(classes);
-
-    valid_samples.to_csv(valid_file, index=False)
-
-    train_samples = extend_samples(train_samples)
-    num_train_samples = len(train_samples)
-    train_samples.to_csv(samples_file, index=False)
-
-    data_config = {'nb_classes': nb_classes, 'num_train_samples':num_train_samples, 'num_valid_samples':num_valid_samples}
-    save_obj(data_config, 'data_config')
-    print(data_config)
-
-    c2id = dict((c, i) for (i, c) in enumerate(list(classes)))
-    save_obj(c2id, 'c2id')
-
-def split_samples_for_test():
-    df = pd.read_csv(origin_train_label_file)
-    df = shuffle(df[df.Id != 'new_whale']).reset_index(drop=True)
-    grouped = df.groupby(["Id"])
-    df = grouped.filter(lambda x: len(x) >= 5).reset_index(drop=True)
-    df = df.reset_index(drop=True)
-    num_all_samples = len(df)
-    num_valid_samples = int(num_all_samples * 0.2)
-    train_samples = df.iloc[num_valid_samples:]
-    valid_samples = df.iloc[:num_valid_samples]
-    classes = [c for (c, g) in df.groupby(['Id'])]
-    nb_classes = len(classes);
-    valid_samples.to_csv(valid_file, index=False)
-    train_samples.to_csv(samples_file, index=False)
-
-    num_train_samples = len(train_samples)
-    data_config = {'nb_classes': nb_classes, 'num_train_samples':num_train_samples, 'num_valid_samples':num_valid_samples}
-    save_obj(data_config, 'data_config')
-    print(data_config)
-
-    c2id = dict((c, i) for (i, c) in enumerate(list(classes)))
-    save_obj(c2id, 'c2id')
-
-def split_samples_for_build_head_model():
-    df = pd.read_csv(origin_train_label_file)
-    df = shuffle(df[df.Id != 'new_whale']).reset_index(drop=True)
-    grouped = df.groupby(["Id"])
-    df = grouped.filter(lambda x: len(x) >= 2).reset_index(drop=True)
+    df = df[df['Id'] != 'new_whale']
+    df = df.groupby(['Id']).filter(lambda x: len(x) >= min_sample_count)
     df = shuffle(df).reset_index(drop=True)
-    df = df.reset_index(drop=True)
-    num_all_samples = len(df)
-    num_valid_samples = int(num_all_samples * 0.1)
-    train_samples = extend_samples(df.iloc[num_valid_samples:], 4)
-    valid_samples = df.iloc[:num_valid_samples]
-    classes = [c for (c, g) in df.groupby(['Id'])]
-    nb_classes = len(classes)
-    valid_samples.to_csv(valid_file, index=False)
-    train_samples.to_csv(samples_file, index=False)
 
-    num_train_samples = len(train_samples)
-    data_config = {'nb_classes': nb_classes, 'num_train_samples':num_train_samples, 'num_valid_samples':num_valid_samples}
-    save_obj(data_config, 'data_config')
-    print(data_config)
+    # print(df)
+    valid_item_count = int(len(df) * valid_ratio)
+    valid_df = df.loc[:valid_item_count]
+    train_df = df.loc[valid_item_count:]
+    
+    valid_df.to_csv(os.path.join(store_folder, config.valid_file_name), index=False)
+    train_df.to_csv(os.path.join(store_folder, config.train_file_name), index=False)
 
-    c2id = dict((c, i) for (i, c) in enumerate(list(classes)))
-    save_obj(c2id, 'c2id')
+    classes = extract_classes(df)
+    c2id = generate_c2id(classes)
+
+    utils.save_c2id(store_folder, c2id)
+    utils.save_config(store_folder, len(df.groupby(['Id'])), len(train_df), len(valid_df))
+
+def data_prepare_feature_extraction_full(store_folder, valid_ratio = 0.2):
+    df = pd.read_csv(origin_train_label_file)
+    df = df[df['Id'] != 'new_whale']
+    df = shuffle(df).reset_index(drop=True)
+
+    # print(df)
+    valid_item_count = int(len(df) * valid_ratio)
+    valid_df = df.loc[:valid_item_count]
+    train_df = df.loc[:]
+    
+    valid_df.to_csv(os.path.join(store_folder, config.valid_file_name), index=False)
+    train_df.to_csv(os.path.join(store_folder, config.train_file_name), index=False)
+
+    classes = extract_classes(df)
+    c2id = generate_c2id(classes)
+
+    utils.save_c2id(store_folder, c2id)
+    utils.save_config(store_folder, len(df.groupby(['Id'])), len(train_df), len(valid_df))
+
+def data_prepare_tokonizer_test(store_folder):
+    df = pd.read_csv(origin_train_label_file)
+    df = df[df['Id'] != 'new_whale']
+    df = df.groupby(['Id']).filter(lambda x: len(x) >= 30)
+    df = shuffle(df).reset_index(drop=True)
+
+    df.to_csv(os.path.join(store_folder, config.train_file_name), index=False)
+
 
 if __name__ == '__main__':
-    #split_samples_for_build_head_model()
-    #split_samples_for_test()
-    #split_samples_for_train()
-    split_samples_for_train_with_validset()
-'''
-    if is_test:
-        
-    else:
-        split_samples_for_train()
-'''
+    data_prepare_feature_extraction('output/test', 2)
