@@ -2,6 +2,9 @@ import pickle
 import os
 import config
 import numpy as np
+import cv2 as cv
+import numpy as np
+from keras.applications.inception_resnet_v2 import preprocess_input
 
 
 
@@ -36,9 +39,8 @@ def init_output_folder(store_folder):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
 
-def get_best_model(store_folder):
+def get_best_model(store_folder, pattern = 'model.(?P<epoch>\d+)-(?P<val_acc>[0-9]*\.?[0-9]*).hdf5'):
     import re
-    pattern = 'model.(?P<epoch>\d+)-(?P<val_acc>[0-9]*\.?[0-9]*).hdf5'
     p = re.compile(pattern)
 
     model_path = os.path.join(store_folder, 'models')
@@ -53,4 +55,12 @@ def get_best_model(store_folder):
         filename = os.path.join(model_path, files[best_index])
         print('loading best model: {}'.format(filename))
         return filename
+
+def prepare_image(image_folder, imageid):
+        filename = os.path.join(image_folder, imageid)
+        image = cv.imread(filename)
+        image = cv.resize(image, (config.img_width, config.img_height), interpolation = cv.INTER_CUBIC)
+        image = image[:, :, ::-1] # RGB
+
+        return preprocess_input(image)
 

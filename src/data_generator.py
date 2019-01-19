@@ -63,6 +63,55 @@ class DataGenSequence(Sequence):
 
         return batch_inputs, batch_target
 
+class BranchPredDataGenSequence(Sequence):
+    def __init__(self, samples, batch_size = 16, image_folder = train_image_folder):
+        self.image_folder = image_folder
+        self.batch_size = batch_size
+        self.samples = samples
+
+        print('sample count: ', len(self.samples))
+
+    def __len__(self):
+        return len(self.samples)
+        
+    def on_epoch_end(self):
+        print('epoch end')
+
+    def __getitem__(self, idx):
+        i = idx * self.batch_size
+        length = min(self.batch_size, (len(self.samples) - i))
+        inputs = np.empty((length, img_height, img_width, 3), dtype=np.float32)
+
+        for index in range(length):
+            sample = self.samples.iloc[i + index]
+            inputs[index] = utils.prepare_image(self.image_folder, sample['Image'])
+
+        return inputs   
+
+class PredDataGenSequence(Sequence):
+    def __init__(self, df, image_folder, batch_size = 128):
+        self.image_folder = image_folder
+        self.batch_size = batch_size
+        self.df = df
+
+        print('sample count: ', len(self.df))
+
+    def __len__(self):
+        return len(self.df)
+        
+    def on_epoch_end(self):
+        print('epoch end')
+
+    def __getitem__(self, idx):
+        i = idx * self.batch_size
+        length = min(self.batch_size, (len(self.df) - i))
+        inputs = np.empty((length, img_height, img_width, 3), dtype=np.float32)
+
+        for index in range(length):
+            inputs[index] = utils.prepare_image(self.image_folder, self.df.iloc[i + index]['Image'])
+
+        return inputs
+
 def revert_pre_process(x):
     return ((x + 1) * 127.5).astype(np.uint8)
 

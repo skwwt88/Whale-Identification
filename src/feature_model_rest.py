@@ -17,7 +17,7 @@ num_epochs = 1000
 patience = 50
 dropout_rate = 0.2
 
-best_model = 'output/feature_rest/models/model.189-0.8308.hdf5'
+best_model = 'output/feature_rest_full/models/model.205-0.8661.hdf5'
 
 def build_feature_model(freeze = False):
     base_model = InceptionResNetV2(input_shape=(img_height, img_width, num_channels), weights='imagenet',
@@ -110,7 +110,7 @@ def train(from_prev_model = False):
             use_multiprocessing=False)
 
 def build_pre_trained_feature_model():
-    (nb_classes, num_train_samples, num_valid_samples) = utils.load_config(feature_data_store_folder)
+    (nb_classes, num_train_samples, num_valid_samples) = utils.load_config(feature_data_store_folder_full)
 
     feature_model = build_feature_model(True)
     full_model = build_model_from_base(feature_model, nb_classes)

@@ -16,3 +16,5 @@ valid_file_name = 'valid.csv'
 train_file_name = 'train.csv'
 config_file_name = 'config.pkl'
 c2id_file_name = 'c2id.pkl'
+
+predict_data_folder = '/media/tongwu/workspace/kaggle/whale/output/predict_siamese'
