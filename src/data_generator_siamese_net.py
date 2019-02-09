@@ -16,6 +16,17 @@ from augmentor import aug_pipe
 from config import train_image_folder, img_width, img_height, train_file_name, valid_file_name
 import utils
 
+def prepare_img(img, folder, usage = 'train'):
+    filename = os.path.join(folder, img)
+    image = cv.imread(filename)
+    image = cv.resize(image, (img_width, img_height), interpolation = cv.INTER_CUBIC)
+    image = image[:, :, ::-1] # RGB
+    if usage == 'train':
+        image = aug_pipe.augment_image(image)
+
+    #return preprocess_input(image)
+    return image
+
 class DataGenSequence(Sequence):
     def __init__(self, store_folder, batch_count = 1000, batch_size = 16, usage = 'train'):
         self.usage = usage
@@ -137,8 +148,8 @@ class BranchPredDataGenSequence(Sequence):
         inputs = np.empty((length, img_height, img_width, 3), dtype=np.float32)
 
         for index in range(length):
-            sample = self.samples.iloc[i + index]
-            inputs[index] = utils.prepare_image(self.image_folder, sample['Image'])
+            img = self.samples[i + index]
+            inputs[index] = utils.prepare_image(self.image_folder, img)
 
         return inputs   
 
@@ -203,6 +214,41 @@ class HeadPredDataGenSequenceForNegative(Sequence):
 
 
         return [inputs1, inputs2]  
+
+class PairDataGen(Sequence):
+    def __init__(self, pairs, img2wid, usage = 'train', batch_size = 128, image_folder = train_image_folder):
+        self.image_folder = image_folder
+        self.batch_size = batch_size
+        self.pairs = pairs
+        self.usage = usage
+        self.img2wid = img2wid
+
+        print('sample count: ', len(self.pairs))
+
+    def __len__(self):
+        return ((len(self.pairs) + self.batch_size - 1) // self.batch_size)
+        
+    def on_epoch_end(self):
+        print('epoch end')
+
+    def __getitem__(self, idx):
+        i = idx * self.batch_size
+        length = min(self.batch_size, (len(self.pairs) - i))
+        inputs1 = np.empty((length, img_height, img_width, 3), dtype=np.float32)
+        inputs2 = np.empty((length, img_height, img_width, 3), dtype=np.float32)
+        target = np.empty((length, 1), dtype=np.float32)
+
+        for index in range(length):
+            img1, img2 = self.pairs[i + index]
+            inputs1[index] = prepare_img(img1, self.image_folder, self.usage)
+            inputs2[index] = prepare_img(img2, self.image_folder, self.usage)
+            if self.img2wid[img1] == self.img2wid[img2]:
+                target[index] = 0
+            else:
+                target[index] = 1
+
+
+        return [inputs1, inputs2], target
 
 
 def revert_pre_process(x):
