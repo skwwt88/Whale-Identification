@@ -56,6 +56,23 @@ def get_best_model(store_folder, pattern = 'model.(?P<epoch>\d+)-(?P<val_acc>[0-
         print('loading best model: {}'.format(filename))
         return filename
 
+def get_best_model_loss(store_folder, pattern = 'model.(?P<step>\d+)-(?P<loss>[0-9]*\.?[0-9]*).hdf5'):
+    import re
+    p = re.compile(pattern)
+
+    model_path = os.path.join(store_folder, 'models')
+    files = [f for f in os.listdir(model_path) if p.match(f)]
+    filename = None
+    epoch = None
+    if len(files) > 0:
+        files.sort()
+        loss = [float(p.match(f).groups()[1]) for f in files]
+        best_index = np.argmin(loss)
+
+        filename = os.path.join(model_path, files[best_index])
+        print('loading best model: {}'.format(filename))
+        return filename
+
 def prepare_image(image_folder, imageid):
         filename = os.path.join(image_folder, imageid)
         image = cv.imread(filename)

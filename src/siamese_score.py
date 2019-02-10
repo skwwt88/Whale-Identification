@@ -17,7 +17,7 @@ from keras.engine.topology import Input
 from keras.layers import BatchNormalization, Concatenate, Conv2D, Dense, Dropout, Flatten, MaxPooling2D, GlobalAveragePooling2D, Activation
 from keras.layers import Add, GlobalMaxPooling2D, Lambda, Reshape
 from keras.models import Model
-from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, LearningRateScheduler
 from keras.applications.xception import Xception
 
 from config import img_height, img_width, num_channels, train_image_folder, origin_train_label_file
@@ -25,8 +25,11 @@ from utils import prepare_image
 from data_generator_siamese_net import BranchPredDataGenSequence, PairDataGen
 
 siamese_store = '../output/siamese_net/{0}'.format(time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime()))
+siamese_valid_wid2img = '../output/siamese_net/valid_wid2img'
+siamese_train_wid2img = '../output/siamese_net/train_wid2img'
 train_wid2img = {}
 valid_wid2img = {}
+wid2img = {}
 img2wid = {}
 branch_output = 256
 
@@ -38,6 +41,8 @@ def prepare_data():
     img2wid = {item[0]: item[1] for item in df.values}
 
     df = df[df['Id'] != 'new_whale'].groupby(['Id']).filter(lambda x: len(x) >= 2)
+
+    global wid2img
     wid2img = {c: set(g['Image']) for (c, g) in df.groupby(['Id'])}
     wids = {c for (c, g) in df.groupby(['Id'])}
 
@@ -45,11 +50,14 @@ def prepare_data():
     train_wids = wids - valid_wids
 
     global train_wid2img
-    train_wid2img = {wid: wid2img[wid] for wid in train_wids}
+    #train_wid2img = {wid: wid2img[wid] for wid in train_wids}
+    #utils.save_obj(train_wid2img, siamese_train_wid2img)
+    train_wid2img = utils.load_obj(siamese_train_wid2img)
     
     global valid_wid2img
-    valid_wid2img = {wid: wid2img[wid] for wid in valid_wids}
-    utils.save_obj(valid_wid2img, os.path.join(siamese_store, 'valid_wid2img'))
+    #valid_wid2img = {wid: wid2img[wid] for wid in valid_wids}
+    #utils.save_obj(valid_wid2img, siamese_valid_wid2img)
+    valid_wid2img = utils.load_obj(siamese_valid_wid2img)
     
 
 
@@ -67,9 +75,12 @@ def build_branch_model():
                                    include_top=False)
     x = base_model.output
     x = GlobalMaxPooling2D()(x)
-    x = Dropout(0.20, name='Dropout1')(x)
+    x = Dropout(0.30, name='Dropout1')(x)
+    x = Dense(1024)(x)
+    x = Dropout(0.30, name='Dropout2')(x)
     x = Dense(branch_output)(x)
     x = Lambda(lambda x: K.l2_normalize(x, axis=-1), name='normalize')(x)
+    
     return Model(inputs=base_model.input, outputs=x)
 
 def build_model1(activation='sigmoid', optimizer = keras.optimizers.SGD(lr=4e-5, momentum=0.9, decay=1e-6, nesterov=True)):
@@ -189,8 +200,7 @@ def build_model(activation='sigmoid', optimizer = keras.optimizers.Adam(lr=1e-5)
     return model, branch_model, head_model
 
 #base_model = 'output/siamese_folder_train_wide/models/model.wide.5.40.009-0.8906.hdf5'
-#base_model = '../output/siamese_net/models/2019-02-08-19-10-56/model-0.8580-0.2742.hdf5'
-#base_model = '../output/siamese_net/models/2019-02-09-19-01-42/model-0.8601-0.5766.hdf5'
+base_model = '../output/siamese_net/2019-02-10-09-10-20/models/model-globel-0.4398.hdf5'
 def images2Vecs(images, branch_model):
     batch_size = 128
     datagen = BranchPredDataGenSequence(images, batch_size=batch_size)
@@ -203,13 +213,13 @@ def images2Vecs(images, branch_model):
     #utils.save_obj(result, os.path.join(siamese_store, 'img2vecs'))
     return result
 
-def generate_train_pair(images, img2vecs, img2wid, head_model, sigma1 = 0.2, sigma2 = 0.2):
+def generate_train_pairs(images, img2vecs, head_model, sigma):
     result = []
     process_img_count = 0
 
     np.random.seed(int(round(time.time() * 1000)) % 100000)
-    bias1 = np.random.normal(0, sigma1, 10000)
-    bias2 = np.random.normal(0, sigma2, 10000)
+    bias1 = np.random.normal(0, sigma, 10000)
+    bias2 = np.random.normal(0, sigma, 10000)
     for img1 in images:
         img1vec = img2vecs[img1]
         inputs1 = np.empty((len(images), branch_output), dtype=np.float32)
@@ -228,12 +238,12 @@ def generate_train_pair(images, img2vecs, img2wid, head_model, sigma1 = 0.2, sig
             if img2wid[img1] == img2wid[images[index]]:
                 possitive_pairs.append((img1, images[index], predicts[index] + bias2[randint(0, 9999)]))
             else:
-                nagetive_pairs.append((img1, images[index], predicts[index] + bias1[randint(0, 9999)]))
+                nagetive_pairs.append((img1, images[index], -predicts[index] + bias1[randint(0, 9999)]))
         
-        possitive_pairs = sorted(possitive_pairs, key=itemgetter(2), reverse=True)
-        nagetive_pairs = sorted(nagetive_pairs, key=itemgetter(2))
+        possitive_pairs = sorted(possitive_pairs, key=itemgetter(2))
+        nagetive_pairs = sorted(nagetive_pairs, key=itemgetter(2), reverse=True)
 
-        for index in range(min(len(possitive_pairs), len(nagetive_pairs), 5)):            
+        for index in range(min(len(possitive_pairs), len(nagetive_pairs), 1)):            
             result.append((possitive_pairs[index][0], possitive_pairs[index][1]))
             result.append((nagetive_pairs[index][0], nagetive_pairs[index][1]))
 
@@ -252,61 +262,67 @@ def get_train_images(min_count = 3, max_count = 10):
 
     return wids, imgs
     
-def valid_pairs():
-    df = pd.read_csv(origin_train_label_file)
-    df = df.groupby(['Id']).filter(lambda x: len(x) == 2).sort_values(['Id'])
+def generate_valid_pairs():
+    imgs = list(chain.from_iterable([wid2img[wid] for wid in list(valid_wid2img)]))
 
-    img1 = [item[0] for item in df.values]
-    img2 = [item[0] for item in df.values]
+    same_pairs = []
+    diff_pairs = []
 
-    random.shuffle(img1)
-    random.shuffle(img2)
+    for img1 in imgs:
+        for img2 in imgs:
+            if img1 == img2:
+                continue
+            
+            if img2wid[img1] == img2wid[img2]:
+                same_pairs.append((img1, img2))
+            else:
+                diff_pairs.append((img1, img2))
 
-    diff_pair = []
-    for index in range(len(df)):
-        if img1[index] == img2[index]:
-            continue
-        diff_pair.append((img1[index], img2[index]))
-    random.shuffle(diff_pair)
+    random.shuffle(same_pairs)
+    random.shuffle(diff_pairs)
 
-    same_pair = []
-    for index in range(len(df))[::2]:
-        same_pair.append((df.iloc[index][0], df.iloc[index + 1][0]))
-    random.shuffle(same_pair)
+    return same_pairs[:300] + diff_pairs[:300]
 
-    return diff_pair[:500] + same_pair[:500]
+lrs = [1e-5, 3e-6, 8e-5, 1e-5, 1e-5, 2e-5, 1e-5, 1e-5, 1e-6, 1e-6, 4e-5, 1e-5, 2e-5, 1e-5, 1e-6]
+def lr_schedule(epoch):
+    return lrs[epoch % len(lrs)]
 
-trained_models_path = os.path.join(siamese_store, 'models/{0}'.format(time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime())))
+globel_model_names = siamese_store + '/models/model-globel-{val_binary_crossentropy:.4f}.hdf5'
+globel_model_checkpoint = ModelCheckpoint(globel_model_names, monitor='val_binary_crossentropy', verbose=1, save_best_only=True)
+globel_acc_model_names = siamese_store + '/models/model-globel-acc-{val_acc:.4f}-{val_binary_crossentropy:.4f}.hdf5'
+globel_acc_model_checkpoint = ModelCheckpoint(globel_acc_model_names, monitor='val_acc', verbose=1, save_best_only=True)
+sigmas = [0.3, 0.1, 0.1, 0.02, 0.7]
+def make_step(model, branch_model, head_model, imgs, index):
+    print('start {0} step, sigma {1}'.format(index, sigmas[index // 3]))
 
-def make_step(model, branch_model, head_model, imgs, sigma1 = 15, sigma2 = 15, new_lr = 8e-5, epoch_count = 5):
-    model_names = trained_models_path + '/model-{val_binary_crossentropy:.4f}.hdf5'
+    model_names = siamese_store + '/models/model-{0}'.format(index)+'-{val_binary_crossentropy:.4f}.hdf5'
     model_checkpoint = ModelCheckpoint(model_names, monitor='val_binary_crossentropy', verbose=1, save_best_only=True)
+    lr_schedule_callback = LearningRateScheduler(schedule = lr_schedule, verbose = 1)
     
     img2vecs = images2Vecs(imgs, branch_model)
     
-    train_pairs = generate_train_pair(imgs, img2vecs, img2wid, head_model, sigma1 = sigma1, sigma2 = sigma2)
-    validation_pairs = valid_pairs()
-
-    #K.set_value(model.optimizer.lr, new_lr)
+    train_pairs = generate_train_pairs(imgs, img2vecs, head_model, sigma=sigmas[i % 5])
+    validation_pairs = generate_valid_pairs()
 
     train_datagen = PairDataGen(train_pairs, img2wid, batch_size=8)
     valid_datagen = PairDataGen(validation_pairs, img2wid, usage='test', batch_size=8)
     history = model.fit_generator(
                 train_datagen,
-                steps_per_epoch=((len(train_pairs) + 15) // 8),
+                steps_per_epoch=((len(train_pairs) + 7) // 8),
                 validation_data=valid_datagen,
-                validation_steps=((len(validation_pairs) + 15) // 8),
+                validation_steps=((len(validation_pairs) + 7) // 8),
                 shuffle=True,
-                epochs=epoch_count,
+                epochs=15,
                 initial_epoch=0, 
-                callbacks=[model_checkpoint, reduce_lr],
+                callbacks=[model_checkpoint, globel_model_checkpoint, lr_schedule_callback, globel_acc_model_checkpoint],
                 verbose=1, 
                 use_multiprocessing=False,
-                max_queue_size=4, 
-                workers=2
+                max_queue_size=2, 
+                workers=1
                 ).history
 
-    return epoch_count
+    best_model = utils.get_best_model_loss(siamese_store)
+    model.load_weights(best_model)
 
 def imgs_count(count):
     df = pd.read_csv(origin_train_label_file)
@@ -333,38 +349,16 @@ if __name__ == '__main__':
     prepare_data()
 
     model, branch_model, head_model = build_model()
-    #model.load_weights(base_model)
-    #model.summary()
+    model.summary()
+    model.load_weights(base_model)
 
-    test = False
-    sigma = [10,10,10,10,10, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-    l_rate = [4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 4e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 2e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5 ]
-    epoch_record = [100, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
-    #tmp test
-    if test:
-        model.load_weights(base_model)
-        df = pd.read_csv(origin_train_label_file)
-        df = df.groupby(['Id']).filter(lambda x: len(x) <= 1)
-        imgs = [item[0] for item in df.values]
-        df = pd.read_csv(origin_train_label_file)
-        df = df.groupby(['Id']).filter(lambda x: len(x) == 10).sort_values(['Id'])
-        img_test = []
-        for index in random.sample(range(len(df) // 10), 20):
-            img_test.append(df.iloc[10 * index][0])
-            img_test.append(df.iloc[10 * index + 1][0])
-        imgs += img_test
-        vecs = images2Vecs(imgs, branch_model)
-        for img in img_test:
-            predict(imgs, img2wid, img, vecs, head_model)
-    else:
-        if not os.path.exists(trained_models_path):
-            os.mkdir(trained_models_path)
-
-        i = 0
-        while True:
-            train_wids = random.sample(list(train_wid2img), 10)
-            imgs = list(chain.from_iterable([wid2img[wid] for wid in train_wids]))
-            i += make_step(model, branch_model, head_model, imgs, sigma1=sigma[i // 10], sigma2=sigma[i // 5], new_lr=64e-5, epoch_count=epoch_record[i // 10])
+    i = 0
+    while True:
+        imgs = list(chain.from_iterable([wid2img[wid] for wid in list(train_wid2img)]))
+        kids = list({img2wid[img] for img in random.sample(imgs, 150)})
+        imgs = list(chain.from_iterable([wid2img[wid] for wid in kids]))
+        make_step(model, branch_model, head_model, imgs, i)
+        i += 1
 
 
     

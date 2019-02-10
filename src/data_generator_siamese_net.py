@@ -243,9 +243,9 @@ class PairDataGen(Sequence):
             inputs1[index] = prepare_img(img1, self.image_folder, self.usage)
             inputs2[index] = prepare_img(img2, self.image_folder, self.usage)
             if self.img2wid[img1] == self.img2wid[img2]:
-                target[index] = 0
-            else:
                 target[index] = 1
+            else:
+                target[index] = 0
 
 
         return [inputs1, inputs2], target
