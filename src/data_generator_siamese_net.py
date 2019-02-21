@@ -24,8 +24,8 @@ def prepare_img(img, folder, usage = 'train'):
     if usage == 'train':
         image = aug_pipe.augment_image(image)
 
-    #return preprocess_input(image)
-    return image
+    return preprocess_input(image)
+    #return image
 
 class DataGenSequence(Sequence):
     def __init__(self, store_folder, batch_count = 1000, batch_size = 16, usage = 'train'):
@@ -226,7 +226,7 @@ class PairDataGen(Sequence):
         print('sample count: ', len(self.pairs))
 
     def __len__(self):
-        return ((len(self.pairs) + self.batch_size - 1) // self.batch_size)
+        return len(self.pairs) // self.batch_size
         
     def on_epoch_end(self):
         print('epoch end')

@@ -4,6 +4,10 @@ import keras
 import numpy as np
 import pandas as pd
 import config
+import random
+from operator import itemgetter
+from random import randint
+from itertools import chain
 
 from keras_tqdm import TQDMNotebookCallback
 from keras import backend as K
@@ -15,7 +19,7 @@ from keras.models import Model
 from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
 from config import img_height, img_width, num_channels, predict_data_folder, train_image_folder, origin_train_label_file
-from data_generator_siamese_net import DataGenSequence, PredDataGenSequence, BranchPredDataGenSequence, HeadPredDataGenSequence, HeadPredDataGenSequenceForNegative
+from data_generator_siamese_net import DataGenSequence, PredDataGenSequence, BranchPredDataGenSequence, HeadPredDataGenSequence, HeadPredDataGenSequenceForNegative, PairDataGen
 from pre_process import data_prepare_tokonizer_test
 from utils import prepare_image
 
@@ -99,13 +103,42 @@ def train_test():
         best_model = utils.get_best_model(siamese_folder_test, pattern='model.{0}'.format(i) + '.(?P<epoch>\d+)-(?P<val_acc>[0-9]*\.?[0-9]*).hdf5')
         model.load_weights(best_model)
 
+def generate_valid_pairs():
+    siamese_valid_wid2img = '../output/siamese_net/valid_wid2img'
+    valid_wid2img = utils.load_obj(siamese_valid_wid2img)
+    df = pd.read_csv(origin_train_label_file)
+    img2wid = {item[0]: item[1] for item in df.values}
+    df = df[df['Id'] != 'new_whale'].groupby(['Id']).filter(lambda x: len(x) >= 2)
+
+    wid2img = {c: set(g['Image']) for (c, g) in df.groupby(['Id'])}
+    imgs = list(chain.from_iterable([wid2img[wid] for wid in list(valid_wid2img)]))
+
+    same_pairs = []
+    diff_pairs = []
+
+    for img1 in imgs:
+        for img2 in imgs:
+            if img1 == img2:
+                continue
+            
+            if img2wid[img1] == img2wid[img2]:
+                same_pairs.append((img1, img2))
+            else:
+                diff_pairs.append((img1, img2))
+
+    random.shuffle(same_pairs)
+    random.shuffle(diff_pairs)
+
+    return same_pairs[:300] + diff_pairs[:300], img2wid
+
 siamese_folder_train_wide = 'output/siamese_folder_train_wide'
 def train_wide_sample(start, end):
     if not os.path.isdir(siamese_folder_train_wide):
         utils.init_output_folder(siamese_folder_train_wide)
 
+    pairs, img2wid = generate_valid_pairs()
     model, branch_model, head_model = build_model(optimizer=keras.optimizers.Adam(lr=1e-5))
-    base_model = 'output/siamese_folder_train_wide/models/model.wide.4.6.013-0.9725.hdf5'
+    base_model = '/media/tongwu/workspace/kaggle/whale/output/siamese_folder_train_wide/models/model.wide.5.40.009-0.8906.hdf5'
     model.load_weights(base_model)
 
     trained_models_path = os.path.join(siamese_folder_train_wide, 'models')
@@ -114,13 +147,16 @@ def train_wide_sample(start, end):
     reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.5, patience=5, min_lr=1e-7, verbose=1)
     callbacks = [model_checkpoint,reduce_lr]
     data_prepare_tokonizer_test(siamese_folder_train_wide, lambda x: len(x) >= start and len(x) <= end)
+    
+    train_datagen = PairDataGen(pairs, img2wid, usage='test', batch_size=8)
+    valid_datagen = PairDataGen(pairs, img2wid, usage='test', batch_size=8)
 
     epoch = 300
     history = model.fit_generator(
-        DataGenSequence(siamese_folder_train_wide, batch_count=100),
-        steps_per_epoch=100,
-        validation_data=DataGenSequence(siamese_folder_train_wide, batch_count=100, usage = 'valid'),
-        validation_steps=100,
+        train_datagen,
+        steps_per_epoch=((len(pairs) + 7) // 8),
+        validation_data=valid_datagen,
+        validation_steps=((len(pairs) + 7) // 8),
         shuffle=True,
         epochs=epoch,
         initial_epoch=0, 
@@ -200,7 +236,7 @@ def predict_test_image():
         predict_one_test_image(image, branch_model, head_model, input_vec)
 
 
-precords = utils.load_obj('record')
+#precords = utils.load_obj('record')
 def agg_result(x):
     x_values = x.values
     idx = np.argsort(x_values)[::-1]
@@ -264,8 +300,8 @@ if __name__ == '__main__':
     #branch_model_output()
 
     #predict_test_image()
-    predicts_for_result('output/predicts/10b1c9d01.jpg.result')
-
+    #predicts_for_result('output/predicts/10b1c9d01.jpg.result')
+    train_wide_sample(7, 8)
     #negative_possibility()
     #process_record()
     #agg_result(1)

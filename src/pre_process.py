@@ -71,4 +71,5 @@ def data_prepare_predict():
 
 if __name__ == '__main__':
     #data_prepare_feature_extraction('output/test', 2)
-    data_prepare_predict()
+    #data_prepare_predict()
+    data_prepare_feature_extraction('output/siamese_folder_train_wide')

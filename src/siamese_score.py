@@ -31,7 +31,7 @@ train_wid2img = {}
 valid_wid2img = {}
 wid2img = {}
 img2wid = {}
-branch_output = 256
+branch_output = 1536
 
 def prepare_data():
     utils.init_output_folder(siamese_store)
@@ -70,7 +70,7 @@ def build_branch_model1():
     x = GlobalAveragePooling2D()(x)
     return Model(inputs=base_model.input, outputs=x)
 
-def build_branch_model():
+def build_branch_model2():
     base_model = Xception(input_shape=img_shape, weights='imagenet',
                                    include_top=False)
     x = base_model.output
@@ -83,7 +83,7 @@ def build_branch_model():
     
     return Model(inputs=base_model.input, outputs=x)
 
-def build_model1(activation='sigmoid', optimizer = keras.optimizers.SGD(lr=4e-5, momentum=0.9, decay=1e-6, nesterov=True)):
+def build_model(activation='sigmoid', optimizer = keras.optimizers.SGD(lr=4e-5, momentum=0.9, decay=1e-6, nesterov=True)):
     branch_model = build_branch_model()
 
     mid        = 32
@@ -120,14 +120,11 @@ def build_model1(activation='sigmoid', optimizer = keras.optimizers.SGD(lr=4e-5,
     model.compile(optimizer, loss='binary_crossentropy', metrics=['binary_crossentropy', 'acc'])
     return model, branch_model, head_model
 
-def build_branch_model2():
+def build_branch_model():
     base_model = InceptionResNetV2(input_shape=img_shape, weights='imagenet',
                                    include_top=False)
     x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    x = Lambda(lambda x: K.l2_normalize(x, axis=-1), name='normalize')(x)
-    x = Dropout(0.18, name='Dropout1')(x)
-    x = Dense(256)(x)
+    x = GlobalMaxPooling2D()(x)
     return Model(inputs=base_model.input, outputs=x)
 
 def subblock(x, filter, **kwargs):
@@ -180,7 +177,7 @@ def build_branch_model3(l2 = 0, activation='sigmoid'):
 
     return Model(inp, x)
 
-def build_model(activation='sigmoid', optimizer = keras.optimizers.Adam(lr=1e-5)):
+def build_model1(activation='sigmoid', optimizer = keras.optimizers.Adam(lr=1e-5)):
     branch_model = build_branch_model()
     xa_inp     = Input(shape=branch_model.output_shape[1:])
     xb_inp     = Input(shape=branch_model.output_shape[1:])
@@ -233,12 +230,16 @@ def generate_train_pairs(images, img2vecs, head_model, sigma):
         predicts.flatten()
 
         possitive_pairs = []
+        possitive_pairs1 = []
         nagetive_pairs = []
+        nagetive_pairs1 = []
         for index in range(len(images)):
             if img2wid[img1] == img2wid[images[index]]:
                 possitive_pairs.append((img1, images[index], predicts[index] + bias2[randint(0, 9999)]))
+                possitive_pairs1.append((img1, images[index], predicts[index]))
             else:
                 nagetive_pairs.append((img1, images[index], -predicts[index] + bias1[randint(0, 9999)]))
+                nagetive_pairs1.append((img1, images[index], predicts[index]))
         
         possitive_pairs = sorted(possitive_pairs, key=itemgetter(2))
         nagetive_pairs = sorted(nagetive_pairs, key=itemgetter(2), reverse=True)
@@ -283,17 +284,17 @@ def generate_valid_pairs():
 
     return same_pairs[:300] + diff_pairs[:300]
 
-lrs = [1e-5, 3e-6, 8e-5, 1e-5, 1e-5, 2e-5, 1e-5, 1e-5, 1e-6, 1e-6, 4e-5, 1e-5, 2e-5, 1e-5, 1e-6]
+lrs = [1e-5, 3e-6, 2e-5, 1e-5, 1e-5, 2e-5, 1e-5, 1e-5, 1e-6, 1e-6, 4e-5, 1e-5, 2e-5, 1e-5, 1e-6]
 def lr_schedule(epoch):
-    return lrs[epoch % len(lrs)]
+    return 1e-7 #lrs[epoch % len(lrs)] * 0.1
 
 globel_model_names = siamese_store + '/models/model-globel-{val_binary_crossentropy:.4f}.hdf5'
 globel_model_checkpoint = ModelCheckpoint(globel_model_names, monitor='val_binary_crossentropy', verbose=1, save_best_only=True)
 globel_acc_model_names = siamese_store + '/models/model-globel-acc-{val_acc:.4f}-{val_binary_crossentropy:.4f}.hdf5'
 globel_acc_model_checkpoint = ModelCheckpoint(globel_acc_model_names, monitor='val_acc', verbose=1, save_best_only=True)
-sigmas = [0.3, 0.1, 0.1, 0.02, 0.7]
+sigmas = [0.05, 0.05, 0.1, 0.05, 0.05]
 def make_step(model, branch_model, head_model, imgs, index):
-    print('start {0} step, sigma {1}'.format(index, sigmas[index // 3]))
+    print('start {0} step, sigma {1}'.format(index, sigmas[i % 5]))
 
     model_names = siamese_store + '/models/model-{0}'.format(index)+'-{val_binary_crossentropy:.4f}.hdf5'
     model_checkpoint = ModelCheckpoint(model_names, monitor='val_binary_crossentropy', verbose=1, save_best_only=True)
@@ -312,7 +313,7 @@ def make_step(model, branch_model, head_model, imgs, index):
                 validation_data=valid_datagen,
                 validation_steps=((len(validation_pairs) + 7) // 8),
                 shuffle=True,
-                epochs=15,
+                epochs=5,
                 initial_epoch=0, 
                 callbacks=[model_checkpoint, globel_model_checkpoint, lr_schedule_callback, globel_acc_model_checkpoint],
                 verbose=1, 
@@ -350,7 +351,7 @@ if __name__ == '__main__':
 
     model, branch_model, head_model = build_model()
     model.summary()
-    model.load_weights(base_model)
+    model.load_weights('../output/siamese_net/2019-02-18-22-02-27/models/model-globel-acc-0.9017-0.2612.hdf5')
 
     i = 0
     while True:
